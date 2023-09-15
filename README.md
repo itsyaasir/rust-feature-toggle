@@ -4,6 +4,14 @@
 
 The "Rust Feature Toggle" is a Visual Studio Code extension designed to enhance the workflow of Rust developers by providing an easy way to toggle feature flags directly from the VSCode interface. Utilizing the status bar and command palette, you can quickly enable or disable features in your project.
 
+## Demo
+
+![Rust Toggler Features](./rust-feature-toggler.gifs)
+
+## Installation
+
+The extension is available on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=itsyaasir.rust-feature-toggler).
+
 ## Features
 
 - Toggle features from the status bar
