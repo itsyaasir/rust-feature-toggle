@@ -47,6 +47,8 @@ function activate(context) {
     'Congratulations, your extension "🚀 rust-feature-toggler" is now active!'
   );
 
+  checkSettingsJson();
+
   const statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
     100
@@ -273,9 +275,15 @@ function checkSettingsJson() {
     getWorkspaceFolderPath(),
     '.vscode/settings.json'
   );
-  if (!fs.existsSync(settingsPath)) {
-    fs.writeFileSync(settingsPath, '{}');
+  try {
+    if (!fs.existsSync(settingsPath)) {
+      fs.mkdirSync(path.join(getWorkspaceFolderPath(), '.vscode'));
+      fs.writeFileSync(settingsPath, '{}');
+    }
+  } catch (error) {
+    console.log(error);
   }
+
   return settingsPath;
 }
 
@@ -389,38 +397,32 @@ function deactivate() {
 /**
  * @param {vscode.TextDocument} document
  */
-const featuresRegex = /\[features\]\n((?:(?!\[).*\n)*)/gm;
-
 function getFeatureLines(document) {
-  const match = featuresRegex.exec(document.getText());
-  return match
-    ? match[1]
-        .split('\n')
-        .filter((line) => (line = line.trim()) && !line.startsWith('#'))
-    : [];
+  const regex = /\[features\]\n((?:(?![\[]).*\n)*)/gm;
+  const match = regex.exec(document.getText());
+  if (match) {
+    return match[1]
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'));
+  }
+  return [];
 }
 
 /**
  * @param {vscode.TextEditor} editor
+ * @param {string | any[]} featureList
  * @param {any[]} featureLines
  */
 function generateDecorations(editor, featureList, featureLines) {
-  const documentText = editor.document.getText();
-  const featureSet = new Set(featureList);
   const decorations = [];
-  const featureSettings = new Map(
-    featureList.map((feature) => [feature, checkFeatureInSettingsJson(feature)])
-  );
-
-  let currentIdx = 0;
 
   featureLines.forEach((line) => {
     const [featureName] = line.split('=');
     if (featureName) {
       const trimmedFeatureName = featureName.trim();
-      if (featureSet.has(trimmedFeatureName)) {
-        const lineStart = documentText.indexOf(line, currentIdx);
-        currentIdx = lineStart + line.length;
+      if (featureList.includes(trimmedFeatureName)) {
+        const lineStart = editor.document.getText().indexOf(line);
         const startPosition = editor.document.positionAt(
           lineStart + line.indexOf(trimmedFeatureName)
         );
@@ -429,7 +431,7 @@ function generateDecorations(editor, featureList, featureLines) {
           trimmedFeatureName.length
         );
         const range = new vscode.Range(startPosition, endPosition);
-        const isEnabled = featureSettings.get(trimmedFeatureName);
+        const isEnabled = checkFeatureInSettingsJson(trimmedFeatureName);
 
         decorations.push({
           range,
@@ -444,11 +446,8 @@ function generateDecorations(editor, featureList, featureLines) {
 }
 
 function drawDecorations() {
-  // print the svg path
-  console.log(checked_svgPath);
-  console.log(unchecked_svgPath);
   const editor = vscode.window.activeTextEditor;
-  if (!editor) {
+  if (!editor && !editor.document.fileName.endsWith('Cargo.toml')) {
     return;
   }
 
@@ -466,7 +465,6 @@ function drawDecorations() {
     decorations.filter((deco) => deco.renderOptions === uncheckedBox)
   );
 }
-
 module.exports = {
   activate,
   deactivate,
