@@ -23,55 +23,160 @@ function activate(context) {
     100
   );
   statusBarItem.command = 'rust-feature.toggleFeature';
-  statusBarItem.text = `$(gear) Toggle Feature`;
 
-  updateStatusBarItem(statusBarItem);
+  const updateFeatureList = () => {
+    const cargoTomlPath = getCargoTomlPath();
+    const features = parseCargoToml(cargoTomlPath);
+    if (Object.keys(features).length === 0) {
+      statusBarItem.text = 'No features found';
+    } else {
+      statusBarItem.text = `$(gear) Toggle Feature`;
+    }
+  };
 
+  updateFeatureList();
   statusBarItem.show();
+
+  const toggleFeature = () => {
+    const cargoTomlPath = getCargoTomlPath();
+    const features = parseCargoToml(cargoTomlPath);
+
+    if (Object.keys(features).length === 0) {
+      vscode.window.showInformationMessage('No features found');
+      return;
+    }
+
+    const featureList = Object.keys(features).map((feature) => {
+      return checkFeatureInSettingsJson(feature)
+        ? `[✓] ${feature}`
+        : `[ ] ${feature}`;
+    });
+
+    vscode.window
+      .showQuickPick(featureList, { placeHolder: 'Select a feature' })
+      .then((feature) => {
+        if (feature) {
+          const featureName = feature.slice(4);
+          feature.startsWith('[✓]')
+            ? removeFeatureFromSettingsJson(featureName)
+            : addFeatureToSettingsJson(featureName);
+
+          vscode.window.showInformationMessage(
+            `Feature ${featureName} toggled`
+          );
+          updateFeatureList();
+          vscode.commands.executeCommand('rust-analyzer.restartServer');
+        }
+      });
+  };
 
   let disposable = vscode.commands.registerCommand(
     'rust-feature.toggleFeature',
-    function () {
-      const cargoTomlPath = getCargoTomlPath();
-
-      console.log(cargoTomlPath);
-
-      const features = parseCargoToml(cargoTomlPath);
-
-      if (Object.keys(features).length === 0) {
-        vscode.window.showInformationMessage('No features found');
-        return;
-      }
-
-      console.log(features);
-
-      const featureList = Object.keys(features).map((feature) => {
-        return checkFeatureInSettingsJson(feature)
-          ? `[✓] ${feature}`
-          : `[ ] ${feature}`;
-      });
-
-      vscode.window
-        .showQuickPick(featureList, { placeHolder: 'Select a feature' })
-        .then((feature) => {
-          if (feature) {
-            const featureName = feature.slice(4);
-            feature.startsWith('[✓]')
-              ? removeFeatureFromSettingsJson(featureName)
-              : addFeatureToSettingsJson(featureName);
-
-            vscode.window.showInformationMessage(
-              `Feature ${featureName} toggled`
-            );
-            updateStatusBarItem(statusBarItem);
-            vscode.commands.executeCommand('rust-analyzer.restartServer');
-          }
-        });
-    }
+    toggleFeature
   );
 
-  context.subscriptions.push(disposable, statusBarItem);
+  const createWatcher = (globPattern) => {
+    const watcher = vscode.workspace.createFileSystemWatcher(globPattern);
+    watcher.onDidChange(updateFeatureList);
+    watcher.onDidCreate(updateFeatureList);
+    watcher.onDidDelete(updateFeatureList);
+    return watcher;
+  };
+
+  const cargoTomlWatcher = createWatcher('**/Cargo.toml');
+  const gitWatcher = createWatcher('**/.git/HEAD');
+
+  disposable = vscode.Disposable.from(
+    disposable,
+    statusBarItem,
+    cargoTomlWatcher,
+    gitWatcher
+  );
+
+  context.subscriptions.push(disposable);
 }
+
+// function activate(context) {
+//   console.log('Congratulations, your extension "rust-feature" is now active!');
+
+//   let statusBarItem = vscode.window.createStatusBarItem(
+//     vscode.StatusBarAlignment.Right,
+//     100
+//   );
+//   statusBarItem.command = 'rust-feature.toggleFeature';
+//   statusBarItem.text = `$(gear) Toggle Feature`;
+
+//   updateStatusBarItem(statusBarItem);
+
+//   statusBarItem.show();
+
+//   updateSettingsJson();
+
+//   const updateAll = () => {
+//     updateSettingsJson();
+//     updateStatusBarItem(statusBarItem);
+//   };
+
+//   const createWatcher = (globPattern) => {
+//     const watcher = vscode.workspace.createFileSystemWatcher(globPattern);
+//     watcher.onDidChange(updateAll);
+//     watcher.onDidCreate(updateAll);
+//     watcher.onDidDelete(updateAll);
+//     return watcher;
+//   };
+
+//   let disposable = vscode.commands.registerCommand(
+//     'rust-feature.toggleFeature',
+//     function () {
+//       const cargoTomlPath = getCargoTomlPath();
+
+//       console.log(cargoTomlPath);
+
+//       const features = parseCargoToml(cargoTomlPath);
+
+//       if (Object.keys(features).length === 0) {
+//         vscode.window.showInformationMessage('No features found');
+//         return;
+//       }
+
+//       console.log(features);
+
+//       const featureList = Object.keys(features).map((feature) => {
+//         return checkFeatureInSettingsJson(feature)
+//           ? `[✓] ${feature}`
+//           : `[ ] ${feature}`;
+//       });
+
+//       vscode.window
+//         .showQuickPick(featureList, { placeHolder: 'Select a feature' })
+//         .then((feature) => {
+//           if (feature) {
+//             const featureName = feature.slice(4);
+//             feature.startsWith('[✓]')
+//               ? removeFeatureFromSettingsJson(featureName)
+//               : addFeatureToSettingsJson(featureName);
+
+//             vscode.window.showInformationMessage(
+//               `Feature ${featureName} toggled`
+//             );
+//             updateStatusBarItem(statusBarItem);
+//             vscode.commands.executeCommand('rust-analyzer.restartServer');
+//           }
+//         });
+//     }
+//   );
+
+//   // File watcher
+//   const cargoTomlWatcher = createWatcher('**/Cargo.toml');
+//   const gitWatcher = createWatcher('**/.git');
+
+//   context.subscriptions.push(
+//     disposable,
+//     statusBarItem,
+//     cargoTomlWatcher,
+//     gitWatcher
+//   );
+// }
 
 /**
  * Updates the tooltip of the status bar item with the list of enabled features.
@@ -260,25 +365,37 @@ function getWorkspaceFolderPath() {
   return vscode.workspace.workspaceFolders[0].uri.fsPath;
 }
 
+// Remove features from settings.json if they are not present in Cargo.toml
+// This is useful when a feature is removed from Cargo.toml
+function updateSettingsJson() {
+  try {
+    const featureList = getFeatureListFromSettingsJson();
+    const cargoTomlPath = getCargoTomlPath();
+    const features = parseCargoToml(cargoTomlPath);
+    const featuresFromCargoToml = Object.keys(features);
+
+    const featuresToRemove = featureList.filter(
+      (feature) => !featuresFromCargoToml.includes(feature)
+    );
+
+    featuresToRemove.forEach((feature) => {
+      removeFeatureFromSettingsJson(feature);
+    });
+  } catch (error) {
+    console.log(error);
+  }
+}
+
 function deactivate() {
   console.log('Your extension "rust-feature" is now deactivated!');
+
+  // Remove features from settings.json if they are not present in Cargo.toml
+  // This is useful when a feature is removed from Cargo.toml
+  updateSettingsJson();
 }
 
 module.exports = {
   activate,
   deactivate,
-  getCargoTomlPath,
-  getFeatureListFromSettingsJson,
-  getWorkspaceFolderPath,
   getFeaturesFromWorkspaceMembers,
-  addFeatureToSettingsJson,
-  updateStatusBarItem,
-  removeFeatureFromSettingsJson,
-  checkFeatureInSettingsJson,
-  parseCargoToml,
-  sanitizeTomlFile,
-  ignoreCommentedOutMember,
-  readSettings,
-  writeSettings,
-  checkSettingsJson,
 };
