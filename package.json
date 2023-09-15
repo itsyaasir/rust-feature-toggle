@@ -3,6 +3,8 @@
   "displayName": "Rust Feature Toggler",
   "description": "Toggle Rust features on and off",
   "license": "MIT OR Apache-2.0",
+  "icon": "icon.jpeg",
+  "publisher": "itsyaasir",
   "repository": {
     "url": "https://github.com/itsyaasir/rust-feature-toggle"
   },

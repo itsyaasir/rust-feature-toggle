@@ -47,7 +47,7 @@ function activate(context) {
     'Congratulations, your extension "🚀 rust-feature-toggler" is now active!'
   );
 
-  checkSettingsJson();
+  initializeSettingJSON();
 
   const statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
@@ -114,40 +114,44 @@ function activate(context) {
  * @param {vscode.StatusBarItem} statusBarItem
  */
 function toggleFeature(statusBarItem) {
-  const cargoTomlPath = getCargoTomlPath();
-  const features = parseCargoToml(cargoTomlPath);
+  try {
+    const cargoTomlPath = getCargoTomlPath();
+    const features = parseCargoToml(cargoTomlPath);
 
-  if (Object.keys(features).length === 0) {
-    vscode.window.showInformationMessage('No features found');
-    return;
-  }
+    if (Object.keys(features).length === 0) {
+      vscode.window.showInformationMessage('No features found');
+      return;
+    }
 
-  const featureList = Object.keys(features).map((feature) => {
-    return checkFeatureInSettingsJson(feature)
-      ? `[✓] ${feature}`
-      : `[ ] ${feature}`;
-  });
-
-  vscode.window
-    .showQuickPick(featureList, { placeHolder: 'Select a feature' })
-    .then((feature) => {
-      if (feature) {
-        const featureName = feature.slice(4);
-        feature.startsWith('[✓]')
-          ? removeFeatureFromSettingsJson(featureName)
-          : addFeatureToSettingsJson(featureName);
-
-        vscode.window.showInformationMessage(
-          `Feature ${featureName} ${
-            feature.startsWith('[✓]') ? 'disabled' : 'enabled'
-          }`
-        );
-
-        vscode.commands.executeCommand('rust-analyzer.restartServer');
-
-        updateStatusBarItem(statusBarItem);
-      }
+    const featureList = Object.keys(features).map((feature) => {
+      return checkFeatureInSettingsJson(feature)
+        ? `[✓] ${feature}`
+        : `[ ] ${feature}`;
     });
+
+    vscode.window
+      .showQuickPick(featureList, { placeHolder: 'Select a feature' })
+      .then((feature) => {
+        if (feature) {
+          const featureName = feature.slice(4);
+          feature.startsWith('[✓]')
+            ? removeFeatureFromSettingsJson(featureName)
+            : addFeatureToSettingsJson(featureName);
+
+          vscode.window.showInformationMessage(
+            `Feature ${featureName} ${
+              feature.startsWith('[✓]') ? 'disabled' : 'enabled'
+            }`
+          );
+
+          vscode.commands.executeCommand('rust-analyzer.restartServer');
+
+          updateStatusBarItem(statusBarItem);
+        }
+      });
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 /**
@@ -270,16 +274,29 @@ function ignoreCommentedOutMember(member) {
  * @returns {string} - The path of the settings.json file
  *
  */
-function checkSettingsJson() {
+function initializeSettingJSON() {
   const settingsPath = path.join(
     getWorkspaceFolderPath(),
     '.vscode/settings.json'
   );
+
   try {
     if (!fs.existsSync(settingsPath)) {
       fs.mkdirSync(path.join(getWorkspaceFolderPath(), '.vscode'));
+
       fs.writeFileSync(settingsPath, '{}');
+
+      vscode.window.showInformationMessage(
+        'Rust Feature Toggle : Created settings.json file in .vscode folder'
+      );
+
+      // Add the SETTINGS_KEY to the settings.json file
+      const settings = readSettings();
+      settings[SETTINGS_KEY] = [];
+      writeSettings(settings);
     }
+
+    return settingsPath;
   } catch (error) {
     console.log(error);
   }
@@ -292,7 +309,7 @@ function checkSettingsJson() {
  * @returns {object} - The settings object.
  */
 function readSettings() {
-  const settingsPath = checkSettingsJson();
+  const settingsPath = initializeSettingJSON();
   return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
 }
 
@@ -302,7 +319,7 @@ function readSettings() {
  * @returns {void}
  */
 function writeSettings(settings) {
-  const settingsPath = checkSettingsJson();
+  const settingsPath = initializeSettingJSON();
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 }
 
@@ -447,7 +464,11 @@ function generateDecorations(editor, featureList, featureLines) {
 
 function drawDecorations() {
   const editor = vscode.window.activeTextEditor;
-  if (!editor && !editor.document.fileName.endsWith('Cargo.toml')) {
+  if (!editor) {
+    return;
+  }
+
+  if (!editor.document.fileName.endsWith('Cargo.toml')) {
     return;
   }
 
