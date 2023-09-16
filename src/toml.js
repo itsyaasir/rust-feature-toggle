@@ -1,17 +1,46 @@
 const fs = require('fs');
 const path = require('path');
 const toml = require('toml');
+const vscode = require('vscode');
+/**
+ * Extracts features from the workspace members defined in the Cargo.toml file.
+ * @param {Array<string>} workspaceMembers - The list of workspace members from the Cargo.toml file.
+ * @returns {Object} - The features aggregated from all workspace members.
+ */
+function getFeaturesFromWorkspaceMembers(workspaceMembers) {
+  const features = {};
+  workspaceMembers.forEach((member) => {
+    if (!ignoreCommentedOutMember(member)) {
+      const cargoTomlPath = path.join(
+        vscode.workspace.workspaceFolders[0].uri.fsPath,
+        member,
+        'Cargo.toml'
+      );
+      try {
+        const fileContent = fs.readFileSync(cargoTomlPath, 'utf8');
+        const sanitizedContent = sanitizeTomlFile(fileContent);
 
-const {
-  getWorkspaceFolderPath,
-  getFeaturesFromWorkspaceMembers,
-} = require('./config');
+        const parsed = toml.parse(sanitizedContent);
+        if (parsed.features) {
+          Object.assign(features, parsed.features);
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    }
+  });
+  return features;
+}
+
 /**
  * Retrieves the path to the Cargo.toml file in the current workspace.
  * @returns {string} - The path to the Cargo.toml file.
  */
 function getCargoTomlPath() {
-  return path.join(getWorkspaceFolderPath(), 'Cargo.toml');
+  return path.join(
+    vscode.workspace.workspaceFolders[0].uri.fsPath,
+    'Cargo.toml'
+  );
 }
 
 /**

@@ -1,14 +1,6 @@
 const vscode = require('vscode');
-const fs = require('fs');
-const toml = require('toml');
-const path = require('path');
 
-const {
-  getCargoTomlPath,
-  parseCargoToml,
-  ignoreCommentedOutMember,
-  sanitizeTomlFile,
-} = require('./toml');
+const { getCargoTomlPath, parseCargoToml } = require('./toml');
 
 /**
  * Utility function to read settings from the configuration
@@ -74,15 +66,6 @@ function getFeatureListFromConfig() {
   return config.get('features');
 }
 
-/**
- * Get workspace folder path
- * @returns {string} - The workspace folder path.
- * @private
- */
-function getWorkspaceFolderPath() {
-  return vscode.workspace.workspaceFolders[0].uri.fsPath;
-}
-
 function updateConfig() {
   try {
     const featureList = getFeatureListFromConfig();
@@ -102,42 +85,10 @@ function updateConfig() {
   }
 }
 
-/**
- * Extracts features from the workspace members defined in the Cargo.toml file.
- * @param {Array<string>} workspaceMembers - The list of workspace members from the Cargo.toml file.
- * @returns {Object} - The features aggregated from all workspace members.
- */
-function getFeaturesFromWorkspaceMembers(workspaceMembers) {
-  const features = {};
-  workspaceMembers.forEach((member) => {
-    if (!ignoreCommentedOutMember(member)) {
-      const cargoTomlPath = path.join(
-        getWorkspaceFolderPath(),
-        member,
-        'Cargo.toml'
-      );
-      try {
-        const fileContent = fs.readFileSync(cargoTomlPath, 'utf8');
-        const sanitizedContent = sanitizeTomlFile(fileContent);
-
-        const parsed = toml.parse(sanitizedContent);
-        if (parsed.features) {
-          Object.assign(features, parsed.features);
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    }
-  });
-  return features;
-}
-
 module.exports = {
   addFeatureToConfig,
   removeFeatureFromConfig,
   checkFeatureInConfig,
   getFeatureListFromConfig,
-  getWorkspaceFolderPath,
   updateConfig,
-  getFeaturesFromWorkspaceMembers,
 };
