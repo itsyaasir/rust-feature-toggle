@@ -30,24 +30,12 @@ let uncheckedBox = vscode.window.createTextEditorDecorationType({
 });
 
 /**
- * Constant which stores the key for the settings.json file.
- * @type {string}
- * @constant
- * @default
- * @readonly
- * @private
- */
-const SETTINGS_KEY = 'rust-analyzer.cargo.features';
-
-/**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
   console.log(
     'Congratulations, your extension "🚀 rust-feature-toggler" is now active!'
   );
-
-  initializeSettingJSON();
 
   const statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
@@ -124,7 +112,7 @@ function toggleFeature(statusBarItem) {
     }
 
     const featureList = Object.keys(features).map((feature) => {
-      return checkFeatureInSettingsJson(feature)
+      return checkFeatureInConfig(feature)
         ? `[✓] ${feature}`
         : `[ ] ${feature}`;
     });
@@ -135,8 +123,8 @@ function toggleFeature(statusBarItem) {
         if (feature) {
           const featureName = feature.slice(4);
           feature.startsWith('[✓]')
-            ? removeFeatureFromSettingsJson(featureName)
-            : addFeatureToSettingsJson(featureName);
+            ? removeFeatureFromConfig(featureName)
+            : addFeatureToConfig(featureName);
 
           vscode.window.showInformationMessage(
             `Feature ${featureName} ${
@@ -160,7 +148,7 @@ function toggleFeature(statusBarItem) {
 function updateStatusBarItem(statusBarItem) {
   const cargoTomlPath = getCargoTomlPath();
   const features = parseCargoToml(cargoTomlPath);
-  const featureListFromSettings = getFeatureListFromSettingsJson();
+  const featureListFromSettings = getFeatureListFromConfig();
 
   if (Object.keys(features).length === 0) {
     statusBarItem.text = 'No features found';
@@ -269,108 +257,67 @@ function ignoreCommentedOutMember(member) {
 }
 
 /**
- * Function which checks if the settings.json file exists in the workspace
- * If it does not exist, it creates the file
- * @returns {string} - The path of the settings.json file
- *
+ * Utility function to read settings from the configuration
+ * @returns {vscode.WorkspaceConfiguration} - The configuration object.
  */
-function initializeSettingJSON() {
-  const settingsPath = path.join(
-    getWorkspaceFolderPath(),
-    '.vscode/settings.json'
-  );
-
-  try {
-    if (!fs.existsSync(settingsPath)) {
-      fs.mkdirSync(path.join(getWorkspaceFolderPath(), '.vscode'));
-
-      fs.writeFileSync(settingsPath, '{}');
-
-      vscode.window.showInformationMessage(
-        'Rust Feature Toggle : Created settings.json file in .vscode folder'
-      );
-
-      // Add the SETTINGS_KEY to the settings.json file
-      const settings = readSettings();
-      settings[SETTINGS_KEY] = [];
-      writeSettings(settings);
-    }
-
-    return settingsPath;
-  } catch (error) {
-    console.log(error);
-  }
-
-  return settingsPath;
+function readConfig() {
+  return vscode.workspace.getConfiguration('rust-analyzer.cargo');
 }
 
 /**
- * Utility function to read settings from the settings.json file
- * @returns {object} - The settings object.
- */
-function readSettings() {
-  const settingsPath = initializeSettingJSON();
-  return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-}
-
-/**
- * Utility function to write settings to the settings.json file
- * @param {object} settings - The settings object.
+ * Utility function to write values to the configuration
+ * @param {string} settings
  * @returns {void}
  */
-function writeSettings(settings) {
-  const settingsPath = initializeSettingJSON();
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+function writeConfig(settings) {
+  const config = vscode.workspace.getConfiguration('rust-analyzer.cargo');
+  const featureList = config.get('features');
+  featureList.push(settings);
+  config.update('features', featureList, vscode.ConfigurationTarget.Workspace);
 }
 
 /**
- * Adds a feature to the settings.json file
+ * Adds a feature to the configuration
  * @param {string} feature - The feature to add.
  * @returns {void}
  */
-function addFeatureToSettingsJson(feature) {
-  const settings = readSettings();
-  settings[SETTINGS_KEY] = settings[SETTINGS_KEY] || [];
-  if (!settings[SETTINGS_KEY].includes(feature)) {
-    settings[SETTINGS_KEY].push(feature);
-    writeSettings(settings);
-  }
+function addFeatureToConfig(feature) {
+  writeConfig(feature);
 }
 
 /**
- * Removes a feature from the settings.json file
+ * Removes a feature from the configuration
  * @param {string} feature - The feature to remove.
  * @returns {void}
  */
-function removeFeatureFromSettingsJson(feature) {
-  const settings = readSettings();
-  if (settings[SETTINGS_KEY]) {
-    settings[SETTINGS_KEY] = settings[SETTINGS_KEY].filter(
-      (/** @type {string} */ f) => f !== feature
-    );
-    writeSettings(settings);
+function removeFeatureFromConfig(feature) {
+  const config = readConfig();
+  const featureList = config.get('features');
+  const index = featureList.indexOf(feature);
+  if (index > -1) {
+    featureList.splice(index, 1);
   }
+  config.update('features', featureList, vscode.ConfigurationTarget.Workspace);
 }
 
 /**
- * Checks if a feature is enabled in the settings.json file.
+ * Checks if a feature is enabled in the configuration
  * @param {string} feature - The feature to check.
  * @returns {boolean} - True if the feature is enabled, false otherwise.
  */
-function checkFeatureInSettingsJson(feature) {
-  const settings = readSettings();
-  return settings[SETTINGS_KEY]
-    ? settings[SETTINGS_KEY].includes(feature)
-    : false;
+function checkFeatureInConfig(feature) {
+  const config = readConfig();
+  const featureList = config.get('features');
+  return featureList.includes(feature);
 }
 
 /**
- * Get the feature list from the settings.json file
+ * Get the feature list from the configuration
  * @returns {Array<string>} - The list of features.
  */
-function getFeatureListFromSettingsJson() {
-  const settings = readSettings();
-  return settings[SETTINGS_KEY] || [];
+function getFeatureListFromConfig() {
+  const config = readConfig();
+  return config.get('features');
 }
 
 /**
@@ -382,11 +329,9 @@ function getWorkspaceFolderPath() {
   return vscode.workspace.workspaceFolders[0].uri.fsPath;
 }
 
-// Remove features from settings.json if they are not present in Cargo.toml
-// This is useful when a feature is removed from Cargo.toml
-function updateSettingsJson() {
+function updateConfig() {
   try {
-    const featureList = getFeatureListFromSettingsJson();
+    const featureList = getFeatureListFromConfig();
     const cargoTomlPath = getCargoTomlPath();
     const features = parseCargoToml(cargoTomlPath);
     const featuresFromCargoToml = Object.keys(features);
@@ -396,7 +341,7 @@ function updateSettingsJson() {
     );
 
     featuresToRemove.forEach((feature) => {
-      removeFeatureFromSettingsJson(feature);
+      removeFeatureFromConfig(feature);
     });
   } catch (error) {
     console.log(error);
@@ -405,10 +350,7 @@ function updateSettingsJson() {
 
 function deactivate() {
   console.log('Your extension "rust-feature-toggler" is now deactivated!');
-
-  // Remove features from settings.json if they are not present in Cargo.toml
-  // This is useful when a feature is removed from Cargo.toml
-  updateSettingsJson();
+  updateConfig();
 }
 
 /**
@@ -448,7 +390,7 @@ function generateDecorations(editor, featureList, featureLines) {
           trimmedFeatureName.length
         );
         const range = new vscode.Range(startPosition, endPosition);
-        const isEnabled = checkFeatureInSettingsJson(trimmedFeatureName);
+        const isEnabled = checkFeatureInConfig(trimmedFeatureName);
 
         decorations.push({
           range,
