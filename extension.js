@@ -10,13 +10,34 @@ const {
 
 const { getCargoTomlPath, parseCargoToml } = require('./src/toml');
 
-const {
-  drawDecorations,
-  updateSvgPaths,
-  updateDecorationTypes,
-} = require('./src/decorations');
+const { getFeatureLines } = require('./src/decorations');
+const path = require('path');
 
 let currentTheme = vscode.window.activeColorTheme.kind;
+
+let checked_svgPath;
+let unchecked_svgPath;
+
+function updateSvgPaths() {
+  const basePath = path.join(__filename, '..', 'assets');
+  const themeSuffix =
+    currentTheme === vscode.ColorThemeKind.Dark ? 'light' : 'dark';
+
+  checked_svgPath = path.join(basePath, `checked_${themeSuffix}.svg`);
+  unchecked_svgPath = path.join(basePath, `unchecked_${themeSuffix}.svg`);
+}
+
+updateSvgPaths();
+
+let checkedBox = vscode.window.createTextEditorDecorationType({
+  gutterIconPath: checked_svgPath,
+  gutterIconSize: 'contain',
+});
+
+let uncheckedBox = vscode.window.createTextEditorDecorationType({
+  gutterIconPath: unchecked_svgPath,
+  gutterIconSize: 'contain',
+});
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -31,10 +52,10 @@ function activate(context) {
     100
   );
   statusBarItem.command = 'rust-feature.toggleFeature';
-
   updateStatusBarItem(statusBarItem);
-  drawDecorations();
   statusBarItem.show();
+
+  drawDecorations();
 
   let disposable = vscode.commands.registerCommand(
     'rust-feature.toggleFeature',
@@ -64,9 +85,8 @@ function activate(context) {
 
   const themeWatcher = vscode.window.onDidChangeActiveColorTheme(() => {
     const newTheme = vscode.window.activeColorTheme.kind;
-    console.log(`current theme: ${currentTheme}, new theme: ${newTheme}`);
+
     if (newTheme !== currentTheme) {
-      console.log('Theme changed');
       currentTheme = newTheme;
       updateSvgPaths();
       updateDecorationTypes();
@@ -149,6 +169,84 @@ function updateStatusBarItem(statusBarItem) {
       .map((feature) => `[✓] ${feature}`)
       .join('\n')}`;
   }
+}
+
+/**
+ * @param {vscode.TextEditor} editor
+ * @param {string | any[]} featureList
+ * @param {any[]} featureLines
+ */
+function generateDecorations(editor, featureList, featureLines) {
+  const decorations = [];
+
+  featureLines.forEach((line) => {
+    const [featureName] = line.split('=');
+    if (featureName) {
+      const trimmedFeatureName = featureName.trim();
+      if (featureList.includes(trimmedFeatureName)) {
+        const lineStart = editor.document.getText().indexOf(line);
+        const startPosition = editor.document.positionAt(
+          lineStart + line.indexOf(trimmedFeatureName)
+        );
+        const endPosition = startPosition.translate(
+          0,
+          trimmedFeatureName.length
+        );
+        const range = new vscode.Range(startPosition, endPosition);
+        const isEnabled = checkFeatureInConfig(trimmedFeatureName);
+
+        decorations.push({
+          range,
+          hoverMessage: isEnabled ? 'Feature enabled' : 'Feature disabled',
+          renderOptions: isEnabled ? checkedBox : uncheckedBox,
+        });
+      }
+    }
+  });
+
+  return decorations;
+}
+
+function drawDecorations() {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    return;
+  }
+
+  if (!editor.document.fileName.endsWith('Cargo.toml')) {
+    return;
+  }
+
+  const features = parseCargoToml(getCargoTomlPath());
+  const featureList = Object.keys(features);
+  const featureLines = getFeatureLines(editor.document);
+  const decorations = generateDecorations(editor, featureList, featureLines);
+
+  editor.setDecorations(
+    checkedBox,
+    decorations.filter((deco) => deco.renderOptions === checkedBox)
+  );
+  editor.setDecorations(
+    uncheckedBox,
+    decorations.filter((deco) => deco.renderOptions === uncheckedBox)
+  );
+}
+
+function updateDecorationTypes() {
+  checkedBox.dispose();
+  uncheckedBox.dispose();
+
+  checkedBox = vscode.window.createTextEditorDecorationType({
+    gutterIconPath: checked_svgPath,
+    gutterIconSize: 'contain',
+  });
+
+  uncheckedBox = vscode.window.createTextEditorDecorationType({
+    gutterIconPath: unchecked_svgPath,
+    gutterIconSize: 'contain',
+  });
+
+  drawDecorations();
 }
 
 function deactivate() {
