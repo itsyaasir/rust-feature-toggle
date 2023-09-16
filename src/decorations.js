@@ -50,8 +50,6 @@ function getFeatureLines(document) {
  * @returns {vscode.DecorationOptions[]}
  */
 function generateDecorations(editor, featureList, featureLines) {
-  console.log(`checkedBox: ${checkedBox.key}`);
-  console.log(`uncheckedBox: ${uncheckedBox.key}`);
   const config = new ConfigManager();
   const decorations = [];
 
@@ -89,8 +87,6 @@ function generateDecorations(editor, featureList, featureLines) {
  *
  */
 function drawDecorations() {
-  console.log(`checkedBox drawDecorations: ${checkedBox.key}`);
-  console.log(`uncheckedBox drawDecorations: ${uncheckedBox.key}`);
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     return;
@@ -103,9 +99,7 @@ function drawDecorations() {
   const features = parseCargoToml(getCargoTomlPath());
   const featureList = Object.keys(features);
   const featureLines = getFeatureLines(editor.document);
-  console.log(`featureLines: ${featureLines}`);
   const decorations = generateDecorations(editor, featureList, featureLines);
-  console.log(`decorations: ${decorations}`);
 
   const setDecorations = (
     /** @type {vscode.TextEditorDecorationType} */ decorationType,
