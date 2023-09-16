@@ -1,84 +1,79 @@
 const vscode = require('vscode');
-
 const { getCargoTomlPath, parseCargoToml } = require('./toml');
 
-/**
- * Utility function to read settings from the configuration
- * @returns {vscode.WorkspaceConfiguration} - The configuration object.
- */
-function readConfig() {
-  return vscode.workspace.getConfiguration('rust-analyzer.cargo');
-}
-
-/**
- * Utility function to write values to the configuration
- * @param {string} settings
- * @returns {void}
- */
-function writeConfig(settings) {
-  const config = vscode.workspace.getConfiguration('rust-analyzer.cargo');
-  const featureList = config.get('features');
-  featureList.push(settings);
-  config.update('features', featureList, vscode.ConfigurationTarget.Workspace);
-}
-
-/**
- * Adds a feature to the configuration
- * @param {string} feature - The feature to add.
- * @returns {void}
- */
-function addFeatureToConfig(feature) {
-  writeConfig(feature);
-}
-
-/**
- * Removes a feature from the configuration
- * @param {string} feature - The feature to remove.
- * @returns {void}
- */
-function removeFeatureFromConfig(feature) {
-  const config = readConfig();
-  const featureList = config.get('features');
-  const index = featureList.indexOf(feature);
-  if (index > -1) {
-    featureList.splice(index, 1);
+class ConfigManager {
+  constructor() {
+    this.config = vscode.workspace.getConfiguration('rust-analyzer.cargo');
   }
-  config.update('features', featureList, vscode.ConfigurationTarget.Workspace);
+
+  getFeatureList() {
+    return this.config.get('features');
+  }
+
+  /**
+   * Add feature to the list of features
+   * @param {string} feature
+   */
+  addFeature(feature) {
+    const featureList = this.getFeatureList();
+    featureList.push(feature);
+    this.updateFeatures(featureList);
+  }
+
+  /**
+   * Remove feature from the list of configured features
+   * @param {string} feature
+   */
+  removeFeature(feature) {
+    const featureList = this.getFeatureList();
+    const index = featureList.indexOf(feature);
+    if (index > -1) {
+      featureList.splice(index, 1);
+      this.updateFeatures(featureList);
+    }
+  }
+
+  /**
+   * Check if feature is in the list of configured features
+   * @param {string} feature
+   */
+  checkFeature(feature) {
+    const featureList = this.getFeatureList();
+    return featureList.includes(feature);
+  }
+
+  /**
+   * @param {any} featureList
+   */
+  updateFeatures(featureList) {
+    this.config.update(
+      'features',
+      featureList,
+      vscode.ConfigurationTarget.Workspace
+    );
+  }
 }
 
 /**
- * Checks if a feature is enabled in the configuration
- * @param {string} feature - The feature to check.
- * @returns {boolean} - True if the feature is enabled, false otherwise.
+ * Remove features from the list of configured features if they are not present in Cargo.toml
+ * @returns {void}
+ * @throws {Error}
  */
-function checkFeatureInConfig(feature) {
-  const config = readConfig();
-  const featureList = config.get('features');
-  return featureList.includes(feature);
-}
-
-/**
- * Get the feature list from the configuration
- * @returns {Array<string>} - The list of features.
- */
-function getFeatureListFromConfig() {
-  const config = readConfig();
-  return config.get('features');
-}
-
 function updateConfig() {
   try {
-    const featureList = getFeatureListFromConfig();
+    const configManager = new ConfigManager();
+    const featureList = configManager.getFeatureList();
     const cargoTomlPath = getCargoTomlPath();
     const features = parseCargoToml(cargoTomlPath);
     const featuresFromCargoToml = Object.keys(features);
 
     const featuresToRemove = featureList.filter(
-      (feature) => !featuresFromCargoToml.includes(feature)
+      (/** @type {string} */ feature) =>
+        !featuresFromCargoToml.includes(feature)
     );
 
-    featuresToRemove.forEach((feature) => {
-      removeFeatureFromConfig(feature);
+    featuresToRemove.forEach((/** @type {any} */ feature) => {
+      configManager.removeFeature(feature);
     });
   } catch (error) {
     console.log(error);
@@ -86,9 +81,6 @@ function updateConfig() {
 }
 
 module.exports = {
-  addFeatureToConfig,
-  removeFeatureFromConfig,
-  checkFeatureInConfig,
-  getFeatureListFromConfig,
   updateConfig,
+  ConfigManager,
 };

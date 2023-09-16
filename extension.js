@@ -1,43 +1,8 @@
 const vscode = require('vscode');
 
-const {
-  checkFeatureInConfig,
-  removeFeatureFromConfig,
-  addFeatureToConfig,
-  getFeatureListFromConfig,
-  updateConfig,
-} = require('./src/config');
-
+const { ConfigManager, updateConfig } = require('./src/config');
 const { getCargoTomlPath, parseCargoToml } = require('./src/toml');
-
-const { getFeatureLines } = require('./src/decorations');
-const path = require('path');
-
-let currentTheme = vscode.window.activeColorTheme.kind;
-
-let checked_svgPath;
-let unchecked_svgPath;
-
-function updateSvgPaths() {
-  const basePath = path.join(__filename, '..', 'assets');
-  const themeSuffix =
-    currentTheme === vscode.ColorThemeKind.Dark ? 'light' : 'dark';
-
-  checked_svgPath = path.join(basePath, `checked_${themeSuffix}.svg`);
-  unchecked_svgPath = path.join(basePath, `unchecked_${themeSuffix}.svg`);
-}
-
-updateSvgPaths();
-
-let checkedBox = vscode.window.createTextEditorDecorationType({
-  gutterIconPath: checked_svgPath,
-  gutterIconSize: 'contain',
-});
-
-let uncheckedBox = vscode.window.createTextEditorDecorationType({
-  gutterIconPath: unchecked_svgPath,
-  gutterIconSize: 'contain',
-});
+const { drawDecorations } = require('./src/decorations');
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -59,59 +24,22 @@ function activate(context) {
 
   let disposable = vscode.commands.registerCommand(
     'rust-feature.toggleFeature',
-    () => toggleFeature(statusBarItem)
+    toggleFeature
   );
 
-  const updateFeatureListAndDecorations = () => {
-    updateStatusBarItem(statusBarItem);
-    drawDecorations();
-  };
+  const watchers = setupWatchers(statusBarItem);
 
-  const createWatcher = (/** @type {vscode.GlobPattern} */ globPattern) => {
-    const watcher = vscode.workspace.createFileSystemWatcher(globPattern);
-    watcher.onDidChange(updateFeatureListAndDecorations);
-    watcher.onDidCreate(updateFeatureListAndDecorations);
-    watcher.onDidDelete(updateFeatureListAndDecorations);
-    return watcher;
-  };
-
-  const cargoTomlWatcher = createWatcher('**/Cargo.toml');
-  const gitWatcher = createWatcher('**/.git/HEAD');
-
-  const editorWatcher =
-    vscode.window.onDidChangeActiveTextEditor(drawDecorations);
-  const editorSaveWatcher =
-    vscode.workspace.onDidSaveTextDocument(drawDecorations);
-
-  const themeWatcher = vscode.window.onDidChangeActiveColorTheme(() => {
-    const newTheme = vscode.window.activeColorTheme.kind;
-
-    if (newTheme !== currentTheme) {
-      currentTheme = newTheme;
-      updateSvgPaths();
-      updateDecorationTypes();
-      drawDecorations();
-    }
-  });
-
-  disposable = vscode.Disposable.from(
-    disposable,
-    statusBarItem,
-    cargoTomlWatcher,
-    gitWatcher,
-    editorWatcher,
-    themeWatcher,
-    editorSaveWatcher
-  );
-
+  disposable = vscode.Disposable.from(disposable, ...watchers);
   context.subscriptions.push(disposable);
 }
 
 /**
- * @param {vscode.StatusBarItem} statusBarItem
+ * Toggle feature
+ * @returns {void}
  */
-function toggleFeature(statusBarItem) {
+function toggleFeature() {
   try {
+    const config = new ConfigManager();
     const cargoTomlPath = getCargoTomlPath();
     const features = parseCargoToml(cargoTomlPath);
 
@@ -121,9 +49,7 @@ function toggleFeature(statusBarItem) {
     }
 
     const featureList = Object.keys(features).map((feature) => {
-      return checkFeatureInConfig(feature)
-        ? `[✓] ${feature}`
-        : `[ ] ${feature}`;
+      return config.checkFeature(feature) ? `[✓] ${feature}` : `[ ] ${feature}`;
     });
 
     vscode.window
@@ -132,9 +58,8 @@ function toggleFeature(statusBarItem) {
         if (feature) {
           const featureName = feature.slice(4);
           feature.startsWith('[✓]')
-            ? removeFeatureFromConfig(featureName)
-            : addFeatureToConfig(featureName);
-
+            ? config.removeFeature(featureName)
+            : config.addFeature(featureName);
           vscode.window.showInformationMessage(
             `Feature ${featureName} ${
               feature.startsWith('[✓]') ? 'disabled' : 'enabled'
@@ -142,22 +67,26 @@ function toggleFeature(statusBarItem) {
           );
 
           vscode.commands.executeCommand('rust-analyzer.restartServer');
-
-          updateStatusBarItem(statusBarItem);
         }
       });
   } catch (error) {
     console.log(error);
+    vscode.window.showErrorMessage(
+      'An error occurred while toggling the feature. Please check the console for more details.'
+    );
   }
 }
 
 /**
+ * Update status bar item
  * @param {vscode.StatusBarItem} statusBarItem
+ * @returns {void}
  */
 function updateStatusBarItem(statusBarItem) {
+  const config = new ConfigManager();
   const cargoTomlPath = getCargoTomlPath();
   const features = parseCargoToml(cargoTomlPath);
-  const featureListFromSettings = getFeatureListFromConfig();
+  const featureListFromSettings = config.getFeatureList();
 
   if (Object.keys(features).length === 0) {
     statusBarItem.text = 'No features found';
@@ -172,81 +101,44 @@ function updateStatusBarItem(statusBarItem) {
 }
 
 /**
- * @param {vscode.TextEditor} editor
- * @param {string | any[]} featureList
- * @param {any[]} featureLines
+ * Setup watchers
+ * @param {vscode.StatusBarItem} statusBarItem
  */
-function generateDecorations(editor, featureList, featureLines) {
-  const decorations = [];
+function setupWatchers(statusBarItem) {
+  const updateExtension = () => {
+    updateStatusBarItem(statusBarItem);
 
-  featureLines.forEach((line) => {
-    const [featureName] = line.split('=');
-    if (featureName) {
-      const trimmedFeatureName = featureName.trim();
-      if (featureList.includes(trimmedFeatureName)) {
-        const lineStart = editor.document.getText().indexOf(line);
-        const startPosition = editor.document.positionAt(
-          lineStart + line.indexOf(trimmedFeatureName)
-        );
-        const endPosition = startPosition.translate(
-          0,
-          trimmedFeatureName.length
-        );
-        const range = new vscode.Range(startPosition, endPosition);
-        const isEnabled = checkFeatureInConfig(trimmedFeatureName);
+    drawDecorations();
+  };
 
-        decorations.push({
-          range,
-          hoverMessage: isEnabled ? 'Feature enabled' : 'Feature disabled',
-          renderOptions: isEnabled ? checkedBox : uncheckedBox,
-        });
-      }
-    }
+  const fileWatcherCallback = (
+    /** @type {vscode.GlobPattern} */ pattern,
+    /** @type {{ (): void; }} */ callback
+  ) => {
+    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    watcher.onDidChange(callback);
+    watcher.onDidCreate(callback);
+    watcher.onDidDelete(callback);
+    return watcher;
+  };
+
+  const fileWatchers = [
+    fileWatcherCallback('**/Cargo.toml', updateExtension),
+    fileWatcherCallback('**/.git/HEAD', updateExtension),
+  ];
+
+  const editorWatchers = [
+    vscode.window.onDidChangeActiveTextEditor(updateExtension),
+    vscode.workspace.onDidSaveTextDocument(updateExtension),
+  ];
+
+  const configWatcher = vscode.workspace.onDidChangeConfiguration(() => {
+    updateConfig();
+    updateStatusBarItem(statusBarItem);
+    drawDecorations();
   });
 
-  return decorations;
-}
-
-function drawDecorations() {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    return;
-  }
-
-  if (!editor.document.fileName.endsWith('Cargo.toml')) {
-    return;
-  }
-
-  const features = parseCargoToml(getCargoTomlPath());
-  const featureList = Object.keys(features);
-  const featureLines = getFeatureLines(editor.document);
-  const decorations = generateDecorations(editor, featureList, featureLines);
-
-  editor.setDecorations(
-    checkedBox,
-    decorations.filter((deco) => deco.renderOptions === checkedBox)
-  );
-  editor.setDecorations(
-    uncheckedBox,
-    decorations.filter((deco) => deco.renderOptions === uncheckedBox)
-  );
-}
-
-function updateDecorationTypes() {
-  checkedBox.dispose();
-  uncheckedBox.dispose();
-
-  checkedBox = vscode.window.createTextEditorDecorationType({
-    gutterIconPath: checked_svgPath,
-    gutterIconSize: 'contain',
-  });
-
-  uncheckedBox = vscode.window.createTextEditorDecorationType({
-    gutterIconPath: unchecked_svgPath,
-    gutterIconSize: 'contain',
-  });
-
-  drawDecorations();
+  return [statusBarItem, ...fileWatchers, ...editorWatchers, configWatcher];
 }
 
 function deactivate() {
