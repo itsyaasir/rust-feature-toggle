@@ -12,6 +12,10 @@ The "Rust Feature Toggle" is a Visual Studio Code extension designed to enhance 
 
 The extension is available on the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=itsyaasir.rust-feature-toggler).
 
+It is also available on [Open VSX Registry](https://open-vsx.org/extension/itsyaasir/rust-feature-toggler).
+
+TODO: Add instructions for installing from source.
+
 ## Features
 
 - Toggle features from the status bar
