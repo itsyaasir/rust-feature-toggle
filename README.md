@@ -17,6 +17,7 @@ The extension is available on the [Visual Studio Marketplace](https://marketplac
 - Toggle features from the status bar
 - Toggle features from the command palette
 - Quick pick list of features to toggle
+- Gutter decorations to indicate feature status
 
 ## Setup
 
@@ -24,10 +25,11 @@ The extension is available on the [Visual Studio Marketplace](https://marketplac
 2. Open a Rust project
 3. Open the command palette (Ctrl+Shift+P)
 4. Run the "Rust Feature Toggle" command
+5. Select the features you want to toggle
 
 ## Contributing
 
-Contributions are welcome! Please see the [contributing guide](CONTRIBUTING.md) for more details.
+Contributions are welcome! Open an issue or submit a pull request to get started.
 
 ## License
 
