@@ -6,7 +6,7 @@ The "Rust Feature Toggle" is a Visual Studio Code extension designed to enhance 
 
 ## Demo
 
-<img src="./demo/rust-feature-toggler.gif" alt="Demo" width="800" />
+https://github.com/itsyaasir/rust-feature-toggle/assets/7762687/5a82326a-08a7-44cb-93bd-af8dc9b7ed19
 
 ## Installation
 
