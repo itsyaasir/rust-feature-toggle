@@ -7,7 +7,8 @@ class ConfigManager {
   }
 
   getFeatureList() {
-    return this.config.get('features');
+    const features = this.config.get('features');
+    return features === 'all' ? ['all'] : features;
   }
 
   /**
@@ -15,7 +16,19 @@ class ConfigManager {
    * @param {string} feature
    */
   addFeature(feature) {
+    if (feature === 'all') {
+      this.activateAllFeatures();
+      return;
+    }
+
     const featureList = this.getFeatureList();
+    if (featureList.includes('all')) {
+      vscode.window.showInformationMessage(
+        'Cannot add individual features when all features are activated'
+      );
+      return;
+    }
+
     featureList.push(feature);
     this.updateFeatures(featureList);
   }
@@ -25,6 +38,11 @@ class ConfigManager {
    * @param {string} feature
    */
   removeFeature(feature) {
+    if (feature === 'all' || this.getFeatureList().includes('all')) {
+      this.updateFeatures([]);
+      return;
+    }
+
     const featureList = this.getFeatureList();
     const index = featureList.indexOf(feature);
     if (index > -1) {
@@ -32,14 +50,16 @@ class ConfigManager {
       this.updateFeatures(featureList);
     }
   }
-
   /**
    * Check if feature is in the list of configured features
    * @param {string} feature
    */
   checkFeature(feature) {
-    const featureList = this.getFeatureList();
-    return featureList.includes(feature);
+    const featureList = this.config.get('features');
+    return (
+      featureList === 'all' ||
+      (Array.isArray(featureList) && featureList.includes(feature))
+    );
   }
 
   /**
@@ -52,6 +72,13 @@ class ConfigManager {
       vscode.ConfigurationTarget.Workspace
     );
   }
+
+  /** Activate all features
+   *
+   */
+  activateAllFeatures() {
+    this.config.update('features', 'all', vscode.ConfigurationTarget.Workspace);
+  }
 }
 
 /**
@@ -63,6 +90,11 @@ function updateConfig() {
   try {
     const configManager = new ConfigManager();
     const featureList = configManager.getFeatureList();
+    if (featureList.includes('all')) {
+      // If 'all' feature is active, do not remove any features
+      return;
+    }
+
     const cargoTomlPath = getCargoTomlPath();
     const features = parseCargoToml(cargoTomlPath);
     const featuresFromCargoToml = Object.keys(features);

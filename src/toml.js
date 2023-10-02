@@ -7,7 +7,7 @@ const vscode = require('vscode');
  * @param {Array<string>} workspaceMembers - The list of workspace members from the Cargo.toml file.
  * @returns {Object} - The features aggregated from all workspace members.
  */
-function getFeaturesFromWorkspaceMembers(workspaceMembers) {
+function getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures) {
   const features = {};
   workspaceMembers.forEach((member) => {
     if (!ignoreCommentedOutMember(member)) {
@@ -22,7 +22,15 @@ function getFeaturesFromWorkspaceMembers(workspaceMembers) {
 
         const parsed = toml.parse(sanitizedContent);
         if (parsed.features) {
-          Object.assign(features, parsed.features);
+          for (const [feature, value] of Object.entries(parsed.features)) {
+            // Check if the feature already exists in mainFeatures
+            if (mainFeatures[feature]) {
+              // If it does, prefix the feature name with the workspace member name
+              features[`${member}.${feature}`] = value;
+            } else {
+              features[feature] = value;
+            }
+          }
         }
       } catch (error) {
         console.log(error);
@@ -53,16 +61,23 @@ function parseCargoToml(filePath) {
   const sanitizedContent = sanitizeTomlFile(file);
 
   const parsed = toml.parse(sanitizedContent);
+  const features = {};
 
+  // First, get features from the main Cargo.toml file if they exist
   if (parsed.features) {
-    return parsed.features;
+    Object.assign(features, parsed.features);
   }
 
+  // Then, if there are workspace members, get features from their Cargo.toml files
   if (parsed.workspace && parsed.workspace.members) {
-    return getFeaturesFromWorkspaceMembers(parsed.workspace.members);
+    const workspaceFeatures = getFeaturesFromWorkspaceMembers(
+      parsed.workspace.members,
+      features
+    );
+    Object.assign(features, workspaceFeatures);
   }
 
-  return {};
+  return features;
 }
 
 /**
