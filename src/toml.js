@@ -2,13 +2,26 @@ const fs = require('fs');
 const path = require('path');
 const toml = require('toml');
 const vscode = require('vscode');
+
 /**
- * Extracts features from the workspace members defined in the Cargo.toml file.
- * @param {Array<string>} workspaceMembers - The list of workspace members from the Cargo.toml file.
- * @returns {Object} - The features aggregated from all workspace members.
+ * Extracts features from the workspace members defined in the Cargo.toml files.
+ *
+ * Loops through the workspace members and reads the Cargo.toml file at the given
+ * path to parse out any defined features. Features are added to the returned
+ * features object, namespaced by the workspace member name if not already
+ * defined in the mainFeatures object.
+ *
+ * @param {Array<string>} workspaceMembers - The list of workspace members from the Cargo.toml file
+ * @param {{ [x: string]: any; }} mainFeatures - Features already defined for the workspace
+ * @returns {Object} - The aggregated features from all workspace members
  */
 function getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures) {
   const features = {};
+
+  if (!vscode.workspace.workspaceFolders) {
+    return features;
+  }
+
   workspaceMembers.forEach((member) => {
     if (!ignoreCommentedOutMember(member)) {
       const cargoTomlPath = path.join(
@@ -17,18 +30,16 @@ function getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures) {
         'Cargo.toml'
       );
       try {
-        const fileContent = fs.readFileSync(cargoTomlPath, 'utf8');
-        const sanitizedContent = sanitizeTomlFile(fileContent);
-
-        const parsed = toml.parse(sanitizedContent);
+        const contents = fs.readFileSync(cargoTomlPath, 'utf8');
+        const parsed = toml.parse(contents);
         if (parsed.features) {
           for (const [feature, value] of Object.entries(parsed.features)) {
             // Check if the feature already exists in mainFeatures
             if (mainFeatures[feature]) {
-              // If it does, prefix the feature name with the workspace member name
-              features[`${member}.${feature}`] = value;
-            } else {
+              // If it does, use the original feature name
               features[feature] = value;
+            } else {
+              features[`${member}.${feature}`] = value;
             }
           }
         }
@@ -51,27 +62,34 @@ function getCargoTomlPath() {
   );
 }
 
+
 /**
- * Parses the Cargo.toml file to extract the feature list.
- * @param {string} filePath - The path to the Cargo.toml file.
- * @returns {Object} - The list of features from the Cargo.toml file.
+ * Parses the Cargo.toml file at the given file path.
+ *
+ * @param {string} filePath - The path to the Cargo.toml file
+ * @returns {Object} - The parsed contents of the Cargo.toml file
  */
 function parseCargoToml(filePath) {
-  let file = fs.readFileSync(filePath, 'utf8');
-  const sanitizedContent = sanitizeTomlFile(file);
+  let content = fs.readFileSync(filePath, 'utf8');
 
-  const parsed = toml.parse(sanitizedContent);
+  const parsed = toml.parse(content);
+  return parsed;
+}
+
+/**
+ * Extracts the feature list from a parsed Cargo.toml object
+ * @param {Object} parsedCargoToml - The object representing the parsed Cargo.toml file
+ * @returns {Object} - The extracted feature list
+ */
+function extractParsedCargoToml(parsedCargoToml) {
   const features = {};
-
-  // First, get features from the main Cargo.toml file if they exist
-  if (parsed.features) {
-    Object.assign(features, parsed.features);
+  if (parsedCargoToml.features) {
+    Object.assign(features, parsedCargoToml.features);
   }
 
-  // Then, if there are workspace members, get features from their Cargo.toml files
-  if (parsed.workspace && parsed.workspace.members) {
+  if (parsedCargoToml.workspace && parsedCargoToml.workspace.members) {
     const workspaceFeatures = getFeaturesFromWorkspaceMembers(
-      parsed.workspace.members,
+      parsedCargoToml.workspace.members,
       features
     );
     Object.assign(features, workspaceFeatures);
@@ -80,14 +98,6 @@ function parseCargoToml(filePath) {
   return features;
 }
 
-/**
- * Sanitize the toml file content
- * @param {string} file - The toml file content.
- * @returns {string} - The sanitized toml file content.
- */
-function sanitizeTomlFile(file) {
-  return file.replace(/^\s*\w+\.\w+\s*=.*$/gm, '# $&');
-}
 
 /**
  * Checks if a workspace member entry in the Cargo.toml file is commented out.
@@ -101,6 +111,7 @@ function ignoreCommentedOutMember(member) {
 module.exports = {
   getCargoTomlPath,
   parseCargoToml,
-  sanitizeTomlFile,
+  getFeaturesFromWorkspaceMembers,
   ignoreCommentedOutMember,
+  extractParsedCargoToml,
 };

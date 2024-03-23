@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { getCargoTomlPath, parseCargoToml } = require('./toml');
+const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./toml');
 
 class ConfigManager {
   constructor() {
@@ -96,7 +96,8 @@ function updateConfig() {
     }
 
     const cargoTomlPath = getCargoTomlPath();
-    const features = parseCargoToml(cargoTomlPath);
+    const parsed = parseCargoToml(cargoTomlPath);
+    const features = extractParsedCargoToml(parsed);
     const featuresFromCargoToml = Object.keys(features);
 
     const featuresToRemove = featureList.filter(

@@ -63,7 +63,7 @@
     "@types/mocha": "^10.0.1",
     "@types/node": "16.x",
     "@types/vscode": "^1.82.0",
-    "@vscode/test-electron": "^2.3.4",
+    "@vscode/test-electron": "^2.3.9",
     "chai": "^4.3.8",
     "eslint": "^8.47.0",
     "glob": "^10.3.3",

@@ -26,7 +26,7 @@ function createDecorationType(icon) {
 
 /**
  * Get the lines from the [features] section of the Cargo.toml file
- * @param {import('vscode').TextDocument} document
+ * @param {import('vscode').TextDocument | any} document
  */
 function getFeatureLines(document) {
   const regex = /\[features\]\n((?:(?![\[]).*\n)*)/gm;
@@ -44,7 +44,7 @@ function getFeatureLines(document) {
  * Generate decorations for the features in the Cargo.toml file
  * If the feature is enabled, the decoration will be a checked box
  * If the feature is disabled, the decoration will be an unchecked box
- * @param {vscode.TextEditor} editor
+ * @param {vscode.TextEditor | any} editor
  * @param {string | any[]} featureList
  * @param {any[]} featureLines
  * @returns {vscode.DecorationOptions[]}
@@ -119,4 +119,5 @@ module.exports = {
   getFeatureLines,
   createDecorationType,
   drawDecorations,
+  generateDecorations
 };

@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 
 const { ConfigManager, updateConfig } = require('./src/config');
-const { getCargoTomlPath, parseCargoToml } = require('./src/toml');
+const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./src/toml');
 const { drawDecorations } = require('./src/decorations');
 
 /**
@@ -11,6 +11,7 @@ function activate(context) {
   console.log(
     'Congratulations, your extension "🚀 rust-feature-toggler" is now active!'
   );
+
 
   const statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
@@ -44,7 +45,8 @@ async function toggleFeature() {
   try {
     const config = new ConfigManager();
     const cargoTomlPath = getCargoTomlPath();
-    const features = parseCargoToml(cargoTomlPath);
+    const parsed = parseCargoToml(cargoTomlPath);
+    const features = extractParsedCargoToml(parsed);
 
     if (Object.keys(features).length === 0 && !config.checkFeature('all')) {
       vscode.window.showInformationMessage('No features found');
@@ -121,7 +123,9 @@ async function handleSelectedFeature(config, selectedFeature) {
 function updateStatusBarItem(statusBarItem) {
   const config = new ConfigManager();
   const cargoTomlPath = getCargoTomlPath();
-  const features = parseCargoToml(cargoTomlPath);
+  const parsed = parseCargoToml(cargoTomlPath);
+  const features = extractParsedCargoToml(parsed);
+
   const featureListFromSettings = config.getFeatureList();
 
   if (featureListFromSettings.includes('all')) {
