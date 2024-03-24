@@ -1,7 +1,8 @@
 const path = require('path');
 const vscode = require('vscode');
 const { ConfigManager } = require('./config');
-const { parseCargoToml, getCargoTomlPath } = require('./toml');
+const { parseCargoToml, getCargoTomlPath, extractParsedCargoToml } = require('./toml');
+
 
 const BASE_PATH = path.join(__filename, '..', '..', 'assets');
 
@@ -24,50 +25,63 @@ function createDecorationType(icon) {
   });
 }
 
+
 /**
- * Get the lines from the [features] section of the Cargo.toml file
- * @param {import('vscode').TextDocument | any} document
+ * Gets the lines from the [features] section of the Cargo.toml file
+ *
+ * Parses the given document text to extract the lines between the [features]
+ * section header and the next section header. Returns an array of trimmed
+ * non-comment lines.
+ *
+ * @param {import('vscode').TextDocument | any} document - The document to parse
+ * @returns {string[]} Array of feature line strings
  */
 function getFeatureLines(document) {
-  const regex = /\[features\]\n((?:(?![\[]).*\n)*)/gm;
-  const match = regex.exec(document.getText());
-  if (match) {
-    return match[1]
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith('#'));
+  const lines = document.getText().split('\n');
+  const startIndex = lines.findIndex(
+    (/** @type {string} */ line) => line.trim() === '[features]'
+  );
+  if (startIndex !== -1) {
+    const endIndex = lines.findIndex(
+      (/** @type {string} */ line, /** @type {number} */ index) =>
+        index > startIndex && line.startsWith('[')
+    );
+    return lines
+      .slice(startIndex + 1, endIndex !== -1 ? endIndex : lines.length)
+      .map((/** @type {string} */ line) => line.trim())
+      .filter((/** @type {string} */ line) => line && !line.startsWith('#'));
   }
   return [];
 }
 
+
 /**
- * Generate decorations for the features in the Cargo.toml file
- * If the feature is enabled, the decoration will be a checked box
- * If the feature is disabled, the decoration will be an unchecked box
- * @param {vscode.TextEditor | any} editor
- * @param {string | any[]} featureList
- * @param {any[]} featureLines
- * @returns {vscode.DecorationOptions[]}
+ * Generates decorations for features in the editor based on the given feature list and lines.
+ *
+ * Loops through each feature line, extracts the feature name, checks if it is in the given
+ * feature list, and if so generates a decoration with the feature's enabled/disabled state.
+ *
+ * @param {vscode.TextEditor | any} editor - The editor to decorate
+ * @param {string[]} featureList - List of features to check for
+ * @param {string[]} featureLines - Lines from Cargo.toml with feature names
+ * @returns {Object[]} Decorations to apply
  */
 function generateDecorations(editor, featureList, featureLines) {
   const config = new ConfigManager();
   const decorations = [];
+  const documentText = editor.document.getText();
+  const featureMap = new Map(featureList.map(feature => [feature, true]));
 
-  featureLines.forEach((line) => {
-    const [featureName] = line.split('=');
-    if (featureName) {
-      const trimmedFeatureName = featureName.trim();
-      if (featureList.includes(trimmedFeatureName)) {
-        const lineStart = editor.document.getText().indexOf(line);
-        const startPosition = editor.document.positionAt(
-          lineStart + line.indexOf(trimmedFeatureName)
-        );
-        const endPosition = startPosition.translate(
-          0,
-          trimmedFeatureName.length
-        );
+  for (const line of featureLines) {
+    const equalIndex = line.indexOf('=');
+    if (equalIndex !== -1) {
+      const featureName = line.slice(0, equalIndex).trim();
+      if (featureMap.has(featureName)) {
+        const lineStart = documentText.indexOf(line);
+        const startPosition = editor.document.positionAt(lineStart);
+        const endPosition = startPosition.translate(0, featureName.length);
         const range = new vscode.Range(startPosition, endPosition);
-        const isEnabled = config.checkFeature(trimmedFeatureName);
+        const isEnabled = config.checkFeature(featureName);
 
         decorations.push({
           range,
@@ -76,15 +90,17 @@ function generateDecorations(editor, featureList, featureLines) {
         });
       }
     }
-  });
+  }
 
   return decorations;
 }
 
+
 /**
- * Draw decorations for the features in the Cargo.toml file
- * @returns {void}
+ * Draws decorations for Rust features in the active Cargo.toml file.
  *
+ * Parses the Cargo.toml file to extract feature names and lines. Generates
+ * decorations based on these and sets them on the editor.
  */
 function drawDecorations() {
   const editor = vscode.window.activeTextEditor;
@@ -96,7 +112,8 @@ function drawDecorations() {
     return;
   }
 
-  const features = parseCargoToml(getCargoTomlPath());
+  const contents = parseCargoToml(getCargoTomlPath());
+  const features = extractParsedCargoToml(contents);
   const featureList = Object.keys(features);
   const featureLines = getFeatureLines(editor.document);
   const decorations = generateDecorations(editor, featureList, featureLines);

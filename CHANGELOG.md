@@ -6,6 +6,16 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.8] - 2024-04-24
+
+### Fixed
+
+- Bug fixes for improved stability.
+
+### Changed
+
+- Refactored internal mechanisms for faster performance and efficiency.
+
 ## [0.0.7] - 2023-10-02
 
 ### Added
