@@ -59,7 +59,7 @@ async function toggleFeature() {
     });
 
     if (selectedFeature) {
-      await handleSelectedFeature(config, selectedFeature);
+      handleSelectedFeature(config, selectedFeature);
       await vscode.commands.executeCommand('rust-analyzer.restartServer');
     }
   } catch (error) {
@@ -73,7 +73,7 @@ async function toggleFeature() {
 /**
  * Builds a list of features based on the given configuration and feature object.
  *
- * @param {Object} config - The configuration object.
+ * @param { ConfigManager } config - The configuration object.
  * @param {Object} features - The feature object.
  * @returns {Array} An array of feature strings with checkboxes indicating whether each feature is enabled or not.
  */
@@ -88,11 +88,11 @@ function buildFeatureList(config, features) {
 
 /**
  * Handles the selected feature based on the configuration and displays a message to the user.
- * @param {Object} config - The configuration object.
+ * @param { ConfigManager } config - The configuration object.
  * @param {string} selectedFeature - The selected feature to handle.
- * @returns {Promise<void>}
+ * @returns {void}
  */
-async function handleSelectedFeature(config, selectedFeature) {
+function handleSelectedFeature(config, selectedFeature) {
   const featureName = selectedFeature.slice(4);
 
   if (featureName === 'all') {

@@ -18,10 +18,6 @@ const vscode = require('vscode');
 function getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures) {
   const features = {};
 
-  if (!vscode.workspace.workspaceFolders) {
-    return features;
-  }
-
   workspaceMembers.forEach((member) => {
     if (!ignoreCommentedOutMember(member)) {
       const cargoTomlPath = path.join(
@@ -31,15 +27,16 @@ function getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures) {
       );
       try {
         const contents = fs.readFileSync(cargoTomlPath, 'utf8');
-        const parsed = toml.parse(contents);
+        const sanitized = sanitizeCargoToml(contents);
+        const parsed = toml.parse(sanitized);
         if (parsed.features) {
           for (const [feature, value] of Object.entries(parsed.features)) {
             // Check if the feature already exists in mainFeatures
             if (mainFeatures[feature]) {
-              // If it does, use the original feature name
-              features[feature] = value;
-            } else {
+              // If it does, prefix the feature name with the workspace member name
               features[`${member}.${feature}`] = value;
+            } else {
+              features[feature] = value;
             }
           }
         }
@@ -71,8 +68,8 @@ function getCargoTomlPath() {
  */
 function parseCargoToml(filePath) {
   let content = fs.readFileSync(filePath, 'utf8');
-
-  const parsed = toml.parse(content);
+  const sanitized = sanitizeCargoToml(content);
+  const parsed = toml.parse(sanitized);
   return parsed;
 }
 
@@ -99,6 +96,19 @@ function extractParsedCargoToml(parsedCargoToml) {
 }
 
 
+
+/**
+ * Sanitizes a Cargo.toml string
+ * @param {string} cargoToml - The Cargo.toml string to sanitize
+ * @returns {string} The sanitized Cargo.toml string
+ */
+const sanitizeCargoToml = (cargoToml) => {
+  return cargoToml.replace(
+    /(\w+)\.workspace\s*=\s*(true|false)/g,
+    '$1 = { workspace = $2 }'
+  );
+};
+
 /**
  * Checks if a workspace member entry in the Cargo.toml file is commented out.
  * @param {string} member - The workspace member entry to check.
@@ -114,4 +124,5 @@ module.exports = {
   getFeaturesFromWorkspaceMembers,
   ignoreCommentedOutMember,
   extractParsedCargoToml,
+  sanitizeCargoToml
 };

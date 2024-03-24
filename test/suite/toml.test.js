@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { getCargoTomlPath, parseCargoToml, getFeaturesFromWorkspaceMembers } = require('../../src/toml');
+const { getCargoTomlPath, parseCargoToml, sanitizeCargoToml, getFeaturesFromWorkspaceMembers } = require('../../src/toml');
 const sinon = require('sinon');
 const vscode = require('vscode');
 const fs = require('fs');
@@ -155,9 +155,22 @@ describe('TOML Utility Tests', () => {
         sandbox.stub(vscode.workspace, 'workspaceFolders').value([
             {
                 uri: {
-                    fsPath: '/path/to/workspace',
+                    fsPath: '/path/to/workspace/member1',
                 },
+                name: 'member1',
             },
+            {
+                uri: {
+                    fsPath: '/path/to/workspace/member2',
+                },
+                name: 'member2',
+            },
+            {
+                uri: {
+                    fsPath: '/path/to/workspace/member3',
+                },
+                name: 'member3',
+            }
         ]);
         const result = getFeaturesFromWorkspaceMembers(
             workspaceMembers,
@@ -182,6 +195,27 @@ describe('TOML Utility Tests', () => {
             .onThirdCall()
             .returns('# [features]\n# feature5 = []');
 
+        sandbox.stub(vscode.workspace, 'workspaceFolders').value([
+            {
+                uri: {
+                    fsPath: '/path/to/workspace/member1',
+                },
+                name: 'member1',
+            },
+            {
+                uri: {
+                    fsPath: '/path/to/workspace/member2',
+                },
+                name: 'member2',
+            },
+            {
+                uri: {
+                    fsPath: '/path/to/workspace/member3',
+                },
+                name: 'member3',
+            }
+        ]);
+
         const result2 = getFeaturesFromWorkspaceMembers(
             workspaceMembers,
             mainFeatures
@@ -189,5 +223,30 @@ describe('TOML Utility Tests', () => {
 
         assert.deepEqual(result2, {});
 
+    });
+
+    test('sanitizeCargoToml sanitizes correctly', () => {
+        const cargoToml =
+            '[package]\nname = "my-package"\n\n[dependencies]\nrand = "0.8.3"\n\n[features]\nfeature1 = []\nfeature2 = []\n\n[workspace]\nmembers = ["member1", "member2"]';
+
+        const result = sanitizeCargoToml(cargoToml);
+
+        let expected =
+            '[package]\nname = "my-package"\n\n[dependencies]\nrand = "0.8.3"\n\n[features]\nfeature1 = []\nfeature2 = []\n\n[workspace]\nmembers = ["member1", "member2"]';
+
+        assert.strictEqual(result, expected);
+    });
+
+
+    test('sanitizeCargoToml sanitizes incorrect toml incorrectly', () => {
+        const cargoToml =
+            '[package]\nname = "my-package"\n version.workspace = true\n\n[dependencies]\nrand = "0.8.3"\n\n[features]\nfeature1 = []\nfeature2 = []\n\n[workspace]\nmembers = ["member1", "member2"]';
+
+        const result = sanitizeCargoToml(cargoToml);
+
+        let expected =
+            "[package]\nname = \"my-package\"\n version = { workspace = true }\n\n[dependencies]\nrand = \"0.8.3\"\n\n[features]\nfeature1 = []\nfeature2 = []\n\n[workspace]\nmembers = [\"member1\", \"member2\"]";
+
+        assert.strictEqual(result, expected);
     });
 });
