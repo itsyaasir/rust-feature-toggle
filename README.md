@@ -29,12 +29,23 @@ https://github.com/itsyaasir/rust-feature-toggle/assets/7762687/5a82326a-08a7-44
 
 ### From Source
 
+#### Prerequisites
+
+- [Node.js](https://nodejs.org/en/)
+- [Yarn](https://yarnpkg.com/)
+- [VSCE](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#vsce)
+
+Note: You need to install the vsce package globally: `npm install -g vsce`
+
+#### Steps
+
 1. Clone the repository: `git clone https://github.com/itsyaasir/rust-feature-toggle.git`
 2. Navigate to the extension directory: `cd rust-feature-toggle`
-3. Install dependencies: `npm install`
-4. Build the extension: `npm run compile`
-5. Press `F5` to open a new window with the extension loaded
-6. Run the command `Rust Feature Toggle` in the Command Palette to activate the extension
+3. Install dependencies: `yarn`
+4. Build the extension: `vsce package`
+5. Install the extension: `code --install-extension rust-feature-toggle-x.x.x.vsix`
+6. Reload VSCode
+7. Run the command `Rust Feature Toggle` in the Command Palette to activate the extension
 
 ## Features
 
