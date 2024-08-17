@@ -199,6 +199,12 @@ function deactivate() {
   updateConfig();
 }
 
+/**
+ * Creates a debounced version of a function.
+ * @param {Function} func - The function to debounce.
+ * @param {number} delay - The delay in milliseconds.
+ * @returns {Function} A debounced function.
+ */
 const debounce = (func, delay) => {
   let timeoutId;
   return (...args) => {
