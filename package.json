@@ -24,7 +24,7 @@
   ],
   "author": {
     "name": "Yasir Shariff (itsyaasir)",
-    "email": "yasirshariff@outlook.com"
+    "email": "yasir@shariff.dev"
   },
   "activationEvents": [
     "workspaceContains:*/Cargo.toml",

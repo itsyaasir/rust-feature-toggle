@@ -95,6 +95,9 @@ function generateDecorations(editor, featureList, featureLines) {
   return decorations;
 }
 
+/**
+ * @param {string} featureName
+ */
 function toggleFeature(featureName) {
   const config = new ConfigManager();
   if (config.checkFeature(featureName)) {
@@ -107,6 +110,9 @@ function toggleFeature(featureName) {
 
 function registerDecorationClickHandler() {
   vscode.languages.registerCodeLensProvider('toml', {
+    /**
+     * @param {{ fileName: string; positionAt: (arg0: any) => vscode.Position; getText: () => string | string[]; }} document
+     */
     provideCodeLenses(document) {
       if (!document.fileName.endsWith('Cargo.toml')) {
         return [];
@@ -123,7 +129,7 @@ function registerDecorationClickHandler() {
           );
           return new vscode.CodeLens(range, {
             title: 'Toggle feature',
-            command: 'rust-feature.toggleFeature.toggleFeature',
+            command: 'rust-feature-toggler.gutterToggler',
             arguments: [featureName]
           });
         }
@@ -131,7 +137,7 @@ function registerDecorationClickHandler() {
     }
   });
 
-  vscode.commands.registerCommand('rust-feature.toggleFeature.toggleFeature', toggleFeature);
+  vscode.commands.registerCommand('rust-feature-toggler.gutterToggler', toggleFeature);
 }
 
 

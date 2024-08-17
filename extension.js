@@ -4,6 +4,8 @@ const { ConfigManager, updateConfig } = require('./src/config');
 const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./src/toml');
 const { drawDecorations, registerDecorationClickHandler } = require('./src/decorations');
 
+const COMMAND_ID = 'rust-feature.toggleFeature';
+
 /**
  * @param {vscode.ExtensionContext} context
  */
@@ -17,7 +19,7 @@ function activate(context) {
     vscode.StatusBarAlignment.Right,
     100
   );
-  statusBarItem.command = 'rust-feature.toggleFeature';
+  statusBarItem.command = COMMAND_ID;
   updateStatusBarItem(statusBarItem);
   statusBarItem.show();
 
@@ -26,7 +28,7 @@ function activate(context) {
 
 
   let disposable = vscode.commands.registerCommand(
-    'rust-feature.toggleFeature',
+    COMMAND_ID,
     toggleFeature
   );
 
