@@ -95,6 +95,51 @@ function generateDecorations(editor, featureList, featureLines) {
   return decorations;
 }
 
+/**
+ * @param {string} featureName
+ */
+function toggleFeature(featureName) {
+  const config = new ConfigManager();
+  if (config.checkFeature(featureName)) {
+    config.removeFeature(featureName);
+  } else {
+    config.addFeature(featureName);
+  }
+  drawDecorations();
+}
+
+function registerDecorationClickHandler() {
+  vscode.languages.registerCodeLensProvider('toml', {
+    /**
+     * @param {{ fileName: string; positionAt: (arg0: any) => vscode.Position; getText: () => string | string[]; }} document
+     */
+    provideCodeLenses(document) {
+      if (!document.fileName.endsWith('Cargo.toml')) {
+        return [];
+      }
+
+      const featureLines = getFeatureLines(document);
+      return featureLines.map(line => {
+        const equalIndex = line.indexOf('=');
+        if (equalIndex !== -1) {
+          const featureName = line.slice(0, equalIndex).trim();
+          const range = new vscode.Range(
+            document.positionAt(document.getText().indexOf(line)),
+            document.positionAt(document.getText().indexOf(line) + line.length)
+          );
+          return new vscode.CodeLens(range, {
+            title: 'Toggle feature',
+            command: 'rust-feature-toggler.gutterToggler',
+            arguments: [featureName]
+          });
+        }
+      }).filter(Boolean);
+    }
+  });
+
+  vscode.commands.registerCommand('rust-feature-toggler.gutterToggler', toggleFeature);
+}
+
 
 /**
  * Draws decorations for Rust features in the active Cargo.toml file.
@@ -136,5 +181,7 @@ module.exports = {
   getFeatureLines,
   createDecorationType,
   drawDecorations,
-  generateDecorations
+
+  generateDecorations,
+  registerDecorationClickHandler,
 };

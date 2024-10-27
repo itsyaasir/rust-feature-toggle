@@ -4,15 +4,19 @@ const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./
 class ConfigManager {
   constructor() {
     this.config = vscode.workspace.getConfiguration('rust-analyzer.cargo');
+    this.featureSet = new Set(this.getFeatureList());
   }
 
+  /**
+   * @returns {Array<string>}
+   *
+   */
   getFeatureList() {
     const features = this.config.get('features');
     return features === 'all' ? ['all'] : features;
   }
 
   /**
-   * Add feature to the list of features
    * @param {string} feature
    */
   addFeature(feature) {
@@ -21,49 +25,40 @@ class ConfigManager {
       return;
     }
 
-    const featureList = this.getFeatureList();
-    if (featureList.includes('all')) {
+    if (this.featureSet.has('all')) {
       vscode.window.showInformationMessage(
         'Cannot add individual features when all features are activated'
       );
       return;
     }
 
-    featureList.push(feature);
-    this.updateFeatures(featureList);
+    this.featureSet.add(feature);
+    this.updateFeatures([...this.featureSet]);
   }
 
   /**
-   * Remove feature from the list of configured features
    * @param {string} feature
    */
   removeFeature(feature) {
-    if (feature === 'all' || this.getFeatureList().includes('all')) {
+    if (feature === 'all' || this.featureSet.has('all')) {
       this.updateFeatures([]);
+      this.featureSet.clear();
       return;
     }
 
-    const featureList = this.getFeatureList();
-    const index = featureList.indexOf(feature);
-    if (index > -1) {
-      featureList.splice(index, 1);
-      this.updateFeatures(featureList);
-    }
-  }
-  /**
-   * Check if feature is in the list of configured features
-   * @param {string} feature
-   */
-  checkFeature(feature) {
-    const featureList = this.config.get('features');
-    return (
-      featureList === 'all' ||
-      (Array.isArray(featureList) && featureList.includes(feature))
-    );
+    this.featureSet.delete(feature);
+    this.updateFeatures([...this.featureSet]);
   }
 
   /**
-   * @param {any} featureList
+   * @param {string} feature
+   */
+  checkFeature(feature) {
+    return this.featureSet.has('all') || this.featureSet.has(feature);
+  }
+
+  /**
+   * @param {Iterable<string>} featureList
    */
   updateFeatures(featureList) {
     this.config.update(
@@ -71,12 +66,12 @@ class ConfigManager {
       featureList,
       vscode.ConfigurationTarget.Workspace
     );
+    this.featureSet = new Set(featureList);
   }
 
-  /** Activate all features
-   *
-   */
   activateAllFeatures() {
+    // Update the configuration to activate all features
+    // but it is not array but string 'all'
     this.config.update('features', 'all', vscode.ConfigurationTarget.Workspace);
   }
 }
@@ -86,34 +81,33 @@ class ConfigManager {
  * @returns {void}
  * @throws {Error}
  */
+
 function updateConfig() {
   try {
     const configManager = new ConfigManager();
-    const featureList = configManager.getFeatureList();
-    if (featureList.includes('all')) {
-      // If 'all' feature is active, do not remove any features
+    if (configManager.featureSet.has('all')) {
       return;
     }
 
     const cargoTomlPath = getCargoTomlPath();
     const parsed = parseCargoToml(cargoTomlPath);
     const features = extractParsedCargoToml(parsed);
-    const featuresFromCargoToml = Object.keys(features);
+    const featuresFromCargoToml = new Set(Object.keys(features));
 
-    const featuresToRemove = featureList.filter(
-      (/** @type {string} */ feature) =>
-        !featuresFromCargoToml.includes(feature)
+    const featuresToRemove = [...configManager.featureSet].filter(
+      feature => !featuresFromCargoToml.has(feature)
     );
 
-    featuresToRemove.forEach((/** @type {any} */ feature) => {
+    featuresToRemove.forEach(feature => {
       configManager.removeFeature(feature);
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    vscode.window.showErrorMessage(
+      'An error occurred while updating the configuration. Please check the logs for more information.'
+    );
   }
 }
-
-
 
 module.exports = {
   updateConfig,

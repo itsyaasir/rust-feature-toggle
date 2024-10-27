@@ -2,36 +2,39 @@ const vscode = require('vscode');
 
 const { ConfigManager, updateConfig } = require('./src/config');
 const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./src/toml');
-const { drawDecorations } = require('./src/decorations');
+const { drawDecorations, registerDecorationClickHandler } = require('./src/decorations');
+
+const TOGGLE_FEATURE_COMMAND = 'rust-feature.toggleFeature';
 
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-  console.log(
-    'Congratulations, your extension "🚀 rust-feature-toggler" is now active!'
-  );
+  console.log('Congratulations, your extension "🚀 rust-feature-toggler" is now active!');
 
-
-  const statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100
-  );
-  statusBarItem.command = 'rust-feature.toggleFeature';
-  updateStatusBarItem(statusBarItem);
-  statusBarItem.show();
+  const statusBarItem = createStatusBarItem();
 
   drawDecorations();
+  registerDecorationClickHandler();
 
-  let disposable = vscode.commands.registerCommand(
-    'rust-feature.toggleFeature',
-    toggleFeature
-  );
+  let disposable = vscode.commands.registerCommand(TOGGLE_FEATURE_COMMAND, toggleFeature);
 
   const watchers = setupWatchers(statusBarItem);
 
   disposable = vscode.Disposable.from(disposable, ...watchers);
   context.subscriptions.push(disposable);
+}
+
+/** StatusBar item */
+function createStatusBarItem() {
+  const statusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100
+  );
+  statusBarItem.command = TOGGLE_FEATURE_COMMAND;
+  updateStatusBarItem(statusBarItem);
+  statusBarItem.show();
+  return statusBarItem;
 }
 
 /**
@@ -63,9 +66,9 @@ async function toggleFeature() {
       await vscode.commands.executeCommand('rust-analyzer.restartServer');
     }
   } catch (error) {
-    console.error(error);
+    console.error('Error toggling feature:', error);
     vscode.window.showErrorMessage(
-      'An error occurred while toggling the feature. Please check the console for more details.'
+      `An error occurred while toggling the feature: ${error.message}. Please check the console for more details.`
     );
   }
 }
@@ -126,9 +129,9 @@ function updateStatusBarItem(statusBarItem) {
   const parsed = parseCargoToml(cargoTomlPath);
   const features = extractParsedCargoToml(parsed);
 
-  const featureListFromSettings = config.getFeatureList();
+  const featureListFromSettings = config.featureSet;
 
-  if (featureListFromSettings.includes('all')) {
+  if (featureListFromSettings.has('all')) {
     statusBarItem.text = '$(gear) All Features Active';
     statusBarItem.tooltip = 'All features are currently activated.';
     return;
@@ -139,7 +142,7 @@ function updateStatusBarItem(statusBarItem) {
     statusBarItem.tooltip = 'No features available to activate.';
   } else {
     statusBarItem.text = '$(gear) Toggle Feature';
-    statusBarItem.tooltip = `Enabled Features\n${featureListFromSettings
+    statusBarItem.tooltip = `Enabled Features\n${Array.from(featureListFromSettings)
       .map((/** @type {string} */ feature) => `[✓] ${feature}`)
       .join('\n')}`;
   }
@@ -150,11 +153,16 @@ function updateStatusBarItem(statusBarItem) {
  * @param {vscode.StatusBarItem} statusBarItem
  */
 function setupWatchers(statusBarItem) {
-  const updateExtension = () => {
-    updateStatusBarItem(statusBarItem);
 
-    drawDecorations();
+  const debouncedDrawDecorations = debounce(drawDecorations, 300);
+  const debouncedUpdateExtension = debounce(updateStatusBarItem, 300);
+
+  const updateExtension = () => {
+    debouncedUpdateExtension(statusBarItem);
+    debouncedDrawDecorations();
   };
+
+
 
   const fileWatcherCallback = (
     /** @type {vscode.GlobPattern} */ pattern,
@@ -179,8 +187,8 @@ function setupWatchers(statusBarItem) {
 
   const configWatcher = vscode.workspace.onDidChangeConfiguration(() => {
     updateConfig();
-    updateStatusBarItem(statusBarItem);
-    drawDecorations();
+    debouncedUpdateExtension(statusBarItem);
+    debouncedDrawDecorations();
   });
 
   return [statusBarItem, ...fileWatchers, ...editorWatchers, configWatcher];
@@ -190,6 +198,20 @@ function deactivate() {
   console.log('Your extension "rust-feature-toggler" is now deactivated!');
   updateConfig();
 }
+
+/**
+ * Creates a debounced version of a function.
+ * @param {Function} func - The function to debounce.
+ * @param {number} delay - The delay in milliseconds.
+ * @returns {Function} A debounced function.
+ */
+const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func(...args), delay);
+  };
+};
 
 module.exports = {
   activate,
