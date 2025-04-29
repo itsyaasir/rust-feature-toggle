@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const toml = require('toml');
 const vscode = require('vscode');
+const glob = require('glob'); // Import glob
 
 /**
  * Extracts features from the workspace members defined in the Cargo.toml files.
@@ -17,14 +18,27 @@ const vscode = require('vscode');
  */
 function getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures) {
   const features = {};
+  const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
 
-  workspaceMembers.forEach((member) => {
-    if (!ignoreCommentedOutMember(member)) {
-      const cargoTomlPath = path.join(
-        vscode.workspace.workspaceFolders[0].uri.fsPath,
-        member,
-        'Cargo.toml'
-      );
+  workspaceMembers.forEach((memberPattern) => {
+    if (ignoreCommentedOutMember(memberPattern)) {
+      return; // Skip commented out members
+    }
+
+    let memberPaths = [];
+    // Check if the member pattern is a glob
+    if (memberPattern.includes('*')) {
+      // Use glob.sync with mark: true to identify directories
+      const results = glob.sync(memberPattern, { cwd: workspaceRoot, mark: true });
+      // Filter results to keep only directories (those ending with /)
+      memberPaths = results.filter(p => p.endsWith('/')).map(p => p.slice(0, -1)); // Remove trailing slash
+    } else {
+      // Treat as a direct path
+      memberPaths.push(memberPattern);
+    }
+
+    memberPaths.forEach((member) => {
+      const cargoTomlPath = path.join(workspaceRoot, member, 'Cargo.toml');
       try {
         const contents = fs.readFileSync(cargoTomlPath, 'utf8');
         const sanitized = sanitizeCargoToml(contents);
@@ -41,9 +55,10 @@ function getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures) {
           }
         }
       } catch (error) {
-        console.log(error);
+        // Ignore errors like file not found, or parsing errors for individual members
+        // console.log(`Error processing member ${member}:`, error);
       }
-    }
+    });
   });
   return features;
 }
