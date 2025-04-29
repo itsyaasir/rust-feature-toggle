@@ -14,7 +14,7 @@
         "toggle",
         "cargo"
     ],
-    "version": "0.4.0",
+    "version": "0.5.0",
     "engines": {
         "vscode": "^1.82.0"
     },
