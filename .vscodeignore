@@ -9,3 +9,6 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 demo/**
 README.md
+*.vsix
+.yarn
+node_modules

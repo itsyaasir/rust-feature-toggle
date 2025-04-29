@@ -225,6 +225,131 @@ describe('TOML Utility Tests', () => {
 
     });
 
+    test('getFeaturesFromWorkspaceMembers handles glob patterns correctly', () => {
+        const glob = require('glob');
+
+        // Mock glob.sync to return specific paths
+        sandbox.stub(glob, 'sync').returns([
+            'crates/member1/', // Directory (ends with /)
+            'crates/member2/', // Directory
+            'crates/not-a-dir'  // Not a directory (no trailing /)
+        ]);
+
+        // Mock fs.readFileSync for the two directories found by glob
+        const readFileStub = sandbox.stub(fs, 'readFileSync');
+        readFileStub.withArgs('fake/path/to/workspace/crates/member1/Cargo.toml', 'utf8')
+            .returns('[features]\nfeature1 = []\nfeature2 = []');
+        readFileStub.withArgs('fake/path/to/workspace/crates/member2/Cargo.toml', 'utf8')
+            .returns('[features]\nfeature3 = []\nfeature4 = []');
+
+        const workspaceMembers = ['crates/*']; // Glob pattern
+        const mainFeatures = {};
+
+        const result = getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures);
+
+        // Expected: features from both directories found by glob
+        const expected = {
+            'crates/member1.feature1': [],
+            'crates/member1.feature2': [],
+            'crates/member2.feature3': [],
+            'crates/member2.feature4': []
+        };
+
+        assert.deepEqual(result, expected);
+
+        // Verify glob.sync was called with the right parameters
+        sinon.assert.calledWith(glob.sync, 'crates/*', {
+            cwd: 'fake/path/to/workspace',
+            mark: true
+        });
+    });
+
+    test('getFeaturesFromWorkspaceMembers handles mix of direct paths and glob patterns', () => {
+        const glob = require('glob');
+
+        // Mock glob.sync to return paths for the glob pattern
+        const globStub = sandbox.stub(glob, 'sync');
+        globStub.withArgs('libs/*', { cwd: 'fake/path/to/workspace', mark: true })
+            .returns(['libs/lib1/']);
+
+        // Mock fs.readFileSync for all paths
+        const readFileStub = sandbox.stub(fs, 'readFileSync');
+        // For the glob result
+        readFileStub.withArgs('fake/path/to/workspace/libs/lib1/Cargo.toml', 'utf8')
+            .returns('[features]\nglobFeature = []');
+        // For the direct path
+        readFileStub.withArgs('fake/path/to/workspace/direct/path/Cargo.toml', 'utf8')
+            .returns('[features]\ndirectFeature = []');
+
+        const workspaceMembers = ['libs/*', 'direct/path']; // Mix of glob and direct path
+        const mainFeatures = { commonFeature: [] }; // A feature that exists in main workspace
+
+        const result = getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures);
+
+        const expected = {
+            'libs/lib1.globFeature': [],
+            'direct/path.directFeature': []
+        };
+
+        assert.deepEqual(result, expected);
+
+        // Verify glob.sync was called only for the glob pattern
+        sinon.assert.calledOnce(globStub);
+    });
+
+    test('getFeaturesFromWorkspaceMembers handles empty glob results', () => {
+        const glob = require('glob');
+
+        // Mock glob.sync to return empty array (no matches)
+        sandbox.stub(glob, 'sync').returns([]);
+
+        // Mock fs.readFileSync for the direct path
+        const readFileStub = sandbox.stub(fs, 'readFileSync');
+        readFileStub.withArgs('fake/path/to/workspace/direct/path/Cargo.toml', 'utf8')
+            .returns('[features]\ndirectFeature = []');
+
+        const workspaceMembers = ['empty/glob/*', 'direct/path'];
+        const mainFeatures = {};
+
+        const result = getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures);
+
+        // Only features from direct path should be included
+        const expected = {
+            'direct/path.directFeature': []
+        };
+
+        assert.deepEqual(result, expected);
+    });
+
+    test('getFeaturesFromWorkspaceMembers handles complex glob patterns', () => {
+        const glob = require('glob');
+
+        // Mock glob.sync for a more complex pattern
+        sandbox.stub(glob, 'sync').returns([
+            'nested/crates/level1/member1/',
+            'nested/crates/level2/member2/'
+        ]);
+
+        // Mock fs.readFileSync for the found paths
+        const readFileStub = sandbox.stub(fs, 'readFileSync');
+        readFileStub.withArgs('fake/path/to/workspace/nested/crates/level1/member1/Cargo.toml', 'utf8')
+            .returns('[features]\nnestedFeature1 = []');
+        readFileStub.withArgs('fake/path/to/workspace/nested/crates/level2/member2/Cargo.toml', 'utf8')
+            .returns('[features]\nnestedFeature2 = []');
+
+        const workspaceMembers = ['nested/crates/**/*']; // Complex glob with ** (recursive)
+        const mainFeatures = {};
+
+        const result = getFeaturesFromWorkspaceMembers(workspaceMembers, mainFeatures);
+
+        const expected = {
+            'nested/crates/level1/member1.nestedFeature1': [],
+            'nested/crates/level2/member2.nestedFeature2': []
+        };
+
+        assert.deepEqual(result, expected);
+    });
+
     test('sanitizeCargoToml sanitizes correctly', () => {
         const cargoToml =
             '[package]\nname = "my-package"\n\n[dependencies]\nrand = "0.8.3"\n\n[features]\nfeature1 = []\nfeature2 = []\n\n[workspace]\nmembers = ["member1", "member2"]';
