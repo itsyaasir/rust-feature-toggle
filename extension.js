@@ -1,7 +1,7 @@
 const vscode = require('vscode');
 
 const { ConfigManager, updateConfig } = require('./src/config');
-const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./src/toml');
+const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./src/toml-parser');
 const { drawDecorations, registerDecorationClickHandler } = require('./src/decorations');
 
 const TOGGLE_FEATURE_COMMAND = 'rust-feature.toggleFeature';

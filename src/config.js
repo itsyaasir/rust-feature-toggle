@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./toml');
+const { getCargoTomlPath, parseCargoToml, extractParsedCargoToml } = require('./toml-parser');
 
 class ConfigManager {
   constructor() {

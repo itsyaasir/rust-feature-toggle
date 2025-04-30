@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { getCargoTomlPath, parseCargoToml, sanitizeCargoToml, getFeaturesFromWorkspaceMembers } = require('../../src/toml');
+const { getCargoTomlPath, parseCargoToml, sanitizeCargoToml, getFeaturesFromWorkspaceMembers } = require('../../src/toml-parser');
 const sinon = require('sinon');
 const vscode = require('vscode');
 const fs = require('fs');
