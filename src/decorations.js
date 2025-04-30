@@ -1,7 +1,7 @@
 const path = require('path');
 const vscode = require('vscode');
 const { ConfigManager } = require('./config');
-const { parseCargoToml, getCargoTomlPath, extractParsedCargoToml } = require('./toml');
+const { parseCargoToml, getCargoTomlPath, extractParsedCargoToml } = require('./toml-parser');
 
 
 const BASE_PATH = path.join(__filename, '..', '..', 'assets');

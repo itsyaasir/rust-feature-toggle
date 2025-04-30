@@ -8,7 +8,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/.eslintrc.json
 demo/**
-README.md
 *.vsix
 .yarn
-node_modules
+node_modules/**
+!dist
+src/
